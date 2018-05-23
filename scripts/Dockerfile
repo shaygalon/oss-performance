@@ -29,7 +29,7 @@ RUN echo "$TZ" > /etc/timezone && ln -sf /usr/share/zoneinfo/$TZ /etc/localtime 
 RUN bash -c "debconf-set-selections <<< 'mysql-server mysql-server/root_password password root'" && \
 	bash -c "debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password root'" && \
 	apt install -y mysql-server nginx curl && \
-	( chown -R mysql:mysql /var/lib/mysql /var/run/mysqld || true ) && RUN find /var/lib/mysql -type f -exec touch {} \; && \
+	( chown -R mysql:mysql /var/lib/mysql /var/run/mysqld || true ) && find /var/lib/mysql -type f -exec touch {} \; && \
 	( service mysql start || true ) && \
 	( chmod 766 /var/log/nginx/error.log || true )
 
