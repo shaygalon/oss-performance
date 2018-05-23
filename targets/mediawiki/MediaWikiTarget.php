@@ -1,17 +1,16 @@
 <?hh
 /*
- *  Copyright (c) 2014, Facebook, Inc.
+ *  Copyright (c) 2014-present, Facebook, Inc.
  *  All rights reserved.
  *
- *  This source code is licensed under the BSD-style license found in the
- *  LICENSE file in the root directory of this source tree. An additional grant
- *  of patent rights can be found in the PATENTS file in the same directory.
+ *  This source code is licensed under the MIT license found in the
+ *  LICENSE file in the root directory of this source tree.
  *
  */
 
 final class MediaWikiTarget extends PerfTarget {
 
-  const MEDIAWIKI_VERSION = 'mediawiki-1.26.2';
+  const MEDIAWIKI_VERSION = 'mediawiki-1.28.0';
 
   public function __construct(private PerfOptions $options) {}
 
@@ -39,8 +38,13 @@ final class MediaWikiTarget extends PerfTarget {
     // we're in repo-auth mode, the generated files end up in the repo
     $cache_dir = $this->getSourceRoot().'/mw-cache';
     mkdir($cache_dir);
-
     copy(__DIR__.'/LocalSettings.php', $this->getSourceRoot().'/LocalSettings.php');
+
+    $file = $this->getSourceRoot().'/LocalSettings.php';
+    $file_contents = file_get_contents($file);
+    $file_contents = str_replace('__DB_HOST__', $this->options->dbHost, $file_contents );
+    file_put_contents($file, $file_contents);
+
     file_put_contents(
       $this->getSourceRoot().'/LocalSettings.php',
       '$wgCacheDirectory="'.$cache_dir.'";',

@@ -1,11 +1,10 @@
 <?hh
 /*
- *  Copyright (c) 2014, Facebook, Inc.
+ *  Copyright (c) 2014-present, Facebook, Inc.
  *  All rights reserved.
  *
- *  This source code is licensed under the BSD-style license found in the
- *  LICENSE file in the root directory of this source tree. An additional grant
- *  of patent rights can be found in the PATENTS file in the same directory.
+ *  This source code is licensed under the MIT license found in the
+ *  LICENSE file in the root directory of this source tree.
  *
  */
 
@@ -84,7 +83,8 @@ final class PerfRunner {
     Process::sleepSeconds($options->delayPhpStartup);
     invariant(
       $php_engine->isRunning(),
-      'Failed to start '.get_class($php_engine),
+      'Failed to start %s',
+      get_class($php_engine),
     );
 
     if ($target->needsUnfreeze()) {
@@ -114,7 +114,8 @@ final class PerfRunner {
       invariant(!$siege->isRunning(), 'Siege is still running :/');
       invariant(
         $php_engine->isRunning(),
-        get_class($php_engine).' crashed',
+        '%s crashed',
+        get_class($php_engine),
       );
     } else {
       self::PrintProgress('Skipping single request warmup');
@@ -130,10 +131,33 @@ final class PerfRunner {
       invariant(!$siege->isRunning(), 'Siege is still running :/');
       invariant(
         $php_engine->isRunning(),
-        get_class($php_engine).' crashed',
+        '%s crashed',
+        get_class($php_engine),
       );
     } else {
       self::PrintProgress('Skipping multi request warmup');
+    }
+
+    while (!$options->skipWarmUp && $php_engine->needsRetranslatePause()) {
+      self::PrintProgress('Extending warmup, server is not done warming up.');
+      sleep(3);
+      $siege = new Siege($options, $target, RequestModes::WARMUP_MULTI, '10s');
+      $siege->start();
+      invariant($siege->isRunning(), 'Failed to start siege');
+      $siege->wait();
+
+      invariant(!$siege->isRunning(), 'Siege is still running :/');
+      invariant(
+        $php_engine->isRunning(),
+        '%s crashed',
+        get_class($php_engine),
+      );
+    }
+
+    self::PrintProgress('Server warmed, checking queue status.');
+    while (!$options->skipWarmUp && !$php_engine->queueEmpty()) {
+      self::PrintProgress('Server warmed, waiting for queue to drain.');
+      sleep(10);
     }
 
     self::PrintProgress('Clearing nginx access.log');
@@ -161,6 +185,11 @@ final class PerfRunner {
     }
 
     self::PrintProgress('Collecting results');
+    if ($options->remoteSiege) {
+      exec((' scp ' .
+        $options->remoteSiege . ':' . $options->siegeTmpDir . '/* '.
+        $options->tempDir));
+    }
 
     $combined_stats = Map {};
     $siege_stats = $siege->collectStats();
@@ -185,7 +214,7 @@ final class PerfRunner {
       $combined_stats =
         $combined_stats->filterWithKey(($k, $v) ==> $k === 'Combined');
     } else {
-      ksort($combined_stats);
+      ksort(&$combined_stats);
     }
     $combined_stats['Combined']['canonical'] =
       (int) !$options->notBenchmarking;

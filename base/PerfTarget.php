@@ -1,11 +1,10 @@
 <?hh
 /*
- *  Copyright (c) 2014, Facebook, Inc.
+ *  Copyright (c) 2014-present, Facebook, Inc.
  *  All rights reserved.
  *
- *  This source code is licensed under the BSD-style license found in the
- *  LICENSE file in the root directory of this source tree. An additional grant
- *  of patent rights can be found in the PATENTS file in the same directory.
+ *  This source code is licensed under the MIT license found in the
+ *  LICENSE file in the root directory of this source tree.
  *
  */
 
@@ -30,7 +29,9 @@ abstract class PerfTarget {
     $content = file_get_contents($url, /* include path = */ false, $ctx);
     invariant(
       strstr($content, $this->getSanityCheckString()) !== false,
-      'Failed to find string "'.$this->getSanityCheckString().'" in '.$url,
+      'Failed to find string "%s" in %s',
+      $this->getSanityCheckString(),
+      $url,
     );
   }
 
@@ -50,7 +51,7 @@ abstract class PerfTarget {
     }
 
     $patches = glob($dir.'/*.patch');
-    sort($patches);
+    sort(&$patches);
 
     $dir = escapeshellarg($this->getSourceRoot());
 

@@ -1,11 +1,10 @@
 <?hh
 /*
- *  Copyright (c) 2014, Facebook, Inc.
+ *  Copyright (c) 2014-present, Facebook, Inc.
  *  All rights reserved.
  *
- *  This source code is licensed under the BSD-style license found in the
- *  LICENSE file in the root directory of this source tree. An additional grant
- *  of patent rights can be found in the PATENTS file in the same directory.
+ *  This source code is licensed under the MIT license found in the
+ *  LICENSE file in the root directory of this source tree.
  *
  */
 
@@ -14,6 +13,7 @@ abstract class Process {
   protected ?resource $stdin;
   protected ?resource $stdout;
   protected ?string $command;
+  protected ?string $cpuRange = null;
   protected bool $suppress_stdout = false;
 
   private static Vector<Process> $processes = Vector {};
@@ -54,6 +54,11 @@ abstract class Process {
     if ($this->suppress_stdout) {
       $this->command .= ' >/dev/null';
     }
+
+    if ($this->cpuRange !== null) {
+      $this->command = 'taskset -c '.$this->cpuRange.' '.$this->command;
+    }
+
     $use_pipe = ($outputFileName === null);
     $spec =
       [
@@ -73,7 +78,7 @@ abstract class Process {
       }
     }
 
-    $proc = proc_open($this->command, $spec, $pipes, null, $env);
+    $proc = proc_open($this->command, $spec, &$pipes, null, $env);
 
     // Give the shell some time to figure out if it could actually launch the
     // process
@@ -157,7 +162,7 @@ abstract class Process {
       return;
     }
     $status = null;
-    pcntl_waitpid($pid, $status);
+    pcntl_waitpid($pid, &$status);
   }
 
   public function __destruct() {

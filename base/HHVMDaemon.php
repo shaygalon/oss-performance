@@ -1,11 +1,10 @@
 <?hh
 /*
- *  Copyright (c) 2014, Facebook, Inc.
+ *  Copyright (c) 2014-present, Facebook, Inc.
  *  All rights reserved.
  *
- *  This source code is licensed under the BSD-style license found in the
- *  LICENSE file in the root directory of this source tree. An additional grant
- *  of patent rights can be found in the PATENTS file in the same directory.
+ *  This source code is licensed under the MIT license found in the
+ *  LICENSE file in the root directory of this source tree.
  *
  */
 
@@ -32,7 +31,7 @@ final class HHVMDaemon extends PHPEngine {
     if ($options->traceSubProcess) {
       fprintf(STDERR, "%s\n", $check_command);
     }
-    exec($check_command, $output);
+    exec($check_command, &$output);
     $checks = json_decode(implode("\n", $output), /* as array = */ true);
     invariant($checks, 'Got invalid output from hhvm_config_check.php');
     if (array_key_exists('HHVM_VERSION', $checks)) {
@@ -63,7 +62,25 @@ final class HHVMDaemon extends PHPEngine {
   }
 
   <<__Override>>
+  public function needsRetranslatePause(): bool {
+    $status = $this->adminRequest('/warmup-status');
+    return $status !== '' && $status !== 'failure';
+  }
+
+  <<__Override>>
+  public function queueEmpty(): bool {
+    $status = $this->adminRequest('/check-queued');
+    if ($status === 'failure') {
+      return true;
+    }
+    return $status !== '' && $status === '0';
+  }
+
+  <<__Override>>
   protected function getArguments(): Vector<string> {
+    if ($this->options->cpuBind) {
+      $this->cpuRange = $this->options->daemonProcessors;
+    }
     $args = Vector {
       '-m',
       'server',
@@ -80,12 +97,20 @@ final class HHVMDaemon extends PHPEngine {
       '-v',
       'Server.SourceRoot='.$this->target->getSourceRoot(),
       '-v',
-      'Eval.Jit=1',
-      '-d',
-      'pid='.escapeshellarg($this->getPidFilePath()),
+      'Log.File='.$this->options->tempDir.'/hhvm_error.log',
+      '-v',
+      'PidFile='.escapeshellarg($this->getPidFilePath()),
       '-c',
       OSS_PERFORMANCE_ROOT.'/conf/php.ini',
     };
+    if ($this->options->jit) {
+      $args->addAll(Vector {'-v', 'Eval.Jit=1'});
+    } else {
+      $args->addAll(Vector {'-v', 'Eval.Jit=0'});
+    }
+    if ($this->options->statCache) {
+      $args->addAll(Vector {'-v', 'Server.StatCache=1'});
+    }
     if ($this->options->pcreCache) {
       $args->addAll(
         Vector {'-v', 'Eval.PCRECacheType='.$this->options->pcreCache},
@@ -107,6 +132,7 @@ final class HHVMDaemon extends PHPEngine {
     if (count($this->options->hhvmExtraArguments) > 0) {
       $args->addAll($this->options->hhvmExtraArguments);
     }
+    $args->add('-vServer.ThreadCount='.$this->options->serverThreads);
     if ($this->options->precompile) {
       $bcRepo = $this->options->tempDir.'/hhvm.hhbc';
       $args->add('-v');
@@ -123,8 +149,6 @@ final class HHVMDaemon extends PHPEngine {
       $args->add('Server.SourceRoot='.$sourceRoot);
     }
     if ($this->options->tcprint !== null) {
-      $args->add('-v');
-      $args->add('Eval.JitTransCounters=true');
       $args->add('-v');
       $args->add('Eval.DumpTC=true');
     }
@@ -273,46 +297,23 @@ final class HHVMDaemon extends PHPEngine {
 
   public function writeStats(): void {
     $tcprint = $this->options->tcprint;
+    $conf = $this->options->tempDir.'/conf.hdf';
+    $args = Vector {};
+    $hdf = false;
+    foreach ($this->getArguments() as $arg) {
+      if ($hdf)
+        $args->add($arg);
+      $hdf = $arg === '-v';
+    }
+    $confData = implode("\n", $args);
+
+    file_put_contents($conf, $confData);
     if ($tcprint) {
-      $conf = $this->options->tempDir.'/conf.hdf';
-      $args = Vector {};
-      $hdf = false;
-      foreach ($this->getArguments() as $arg) {
-        if ($hdf)
-          $args->add($arg);
-        $hdf = $arg === '-v';
-      }
-      $confData = implode("\n", $args);
-
-      file_put_contents($conf, $confData);
-      $args = Vector {$tcprint, '-c', $conf};
-
       $result = $this->adminRequest('/vm-dump-tc');
       invariant(
         $result === 'Done' && file_exists('/tmp/tc_dump_a'),
         'Failed to dump TC',
       );
-
-      if ($this->options->tcAlltrans) {
-        $alltrans = Utils::RunCommand($args);
-        file_put_contents('tc-all', $alltrans);
-      }
-
-      if ($this->options->tcToptrans) {
-        $new_args = new Vector($args);
-        $new_args->add('-t');
-        $new_args->add('100');
-        $toptrans = Utils::RunCommand($new_args);
-        file_put_contents('tc-top-trans', $toptrans);
-      }
-
-      if ($this->options->tcTopfuncs) {
-        $new_args = new Vector($args);
-        $new_args->add('-T');
-        $new_args->add('100');
-        $topfuncs = Utils::RunCommand($new_args);
-        file_put_contents('tc-top-funcs', $topfuncs);
-      }
     }
 
     if ($this->options->pcredump) {

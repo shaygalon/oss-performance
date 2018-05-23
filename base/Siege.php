@@ -1,11 +1,10 @@
 <?hh
 /*
- *  Copyright (c) 2014, Facebook, Inc.
+ *  Copyright (c) 2014-present, Facebook, Inc.
  *  All rights reserved.
  *
- *  This source code is licensed under the BSD-style license found in the
- *  LICENSE file in the root directory of this source tree. An additional grant
- *  of patent rights can be found in the PATENTS file in the same directory.
+ *  This source code is licensed under the MIT license found in the
+ *  LICENSE file in the root directory of this source tree.
  *
  */
 
@@ -18,6 +17,7 @@ final class Siege extends Process {
     private PerfOptions $options,
     private PerfTarget $target,
     private RequestMode $mode,
+    private string $time = '1M',
   ) {
     parent::__construct($options->siege);
     $this->suppress_stdout = true;
@@ -28,19 +28,27 @@ final class Siege extends Process {
           escapeshellarg($options->siege).' --version 2>&1 | head -n 1',
         ),
       );
-      $bad_prefix = 'SIEGE 3';
-      if (substr($version_line, 0, strlen($bad_prefix)) === $bad_prefix) {
-        fprintf(
-          STDERR,
-          "WARNING: Siege 3.0.0-3.0.7 sends an incorrect HOST header to ports ".
-          "other than :80 and :443. Siege 3.0.8 and 3.0.9 sometimes sends full ".
-          "URLs as paths. You are using '%s'.\n\n".
-          "You can specify a path to siege 2.7x  with the ".
-          "--siege=/path/to/siege option. If you have patched siege to fix ".
-          "these issues, pass --skip-version-checks.\n",
-          $version_line,
-        );
-        exit(1);
+      $bad_prefixes = Vector {
+        'SIEGE 3.0',
+        'SIEGE 4.0.0',
+        'SIEGE 4.0.1',
+        'SIEGE 4.0.2',
+      };
+      foreach ($bad_prefixes as $bad_prefix) {
+        if (substr($version_line, 0, strlen($bad_prefix)) === $bad_prefix) {
+          fprintf(
+            STDERR,
+            "WARNING: Siege 3.0.0-3.0.7 sends an incorrect HOST header to ".
+            "ports other than :80 and :443. Siege 3.0.8 and 3.0.9 sometimes ".
+            "sends full URLs as paths. Siege 4.0.0 - 4.0.2 automatically ".
+            "requests page resources.  You are using '%s'.\n\n".
+            "You can specify a path to a proper siege version with the ".
+            "--siege=/path/to/siege option. If you have patched siege to fix ".
+            "these issues, pass --skip-version-checks.\n",
+            $version_line,
+          );
+          exit(1);
+        }
       }
     }
 
@@ -66,6 +74,13 @@ final class Siege extends Process {
 
   <<__Override>>
   public function getExecutablePath(): string {
+    if ($this->options->remoteSiege) {
+      if ($this->options->noTimeLimit) {
+        return 'ssh ' . $this->options->remoteSiege . ' ' .
+          parent::getExecutablePath();
+      }
+      return 'ssh ' . $this->options->remoteSiege . ' \'timeout\'';
+    }
     if ($this->options->noTimeLimit) {
       return parent::getExecutablePath();
     }
@@ -76,12 +91,22 @@ final class Siege extends Process {
 
   <<__Override>>
   protected function getArguments(): Vector<string> {
+    if ($this->options->cpuBind) {
+      $this->cpuRange = $this->options->helperProcessors;
+    }
     $urls_file = tempnam($this->options->tempDir, 'urls');
     $urls = file_get_contents($this->target->getURLsFile());
     $urls =
       str_replace('__HTTP_PORT__', (string) PerfSettings::HttpPort(), $urls);
+    // Siege doesn't support ipv6
     $urls = str_replace('__HTTP_HOST__', gethostname(), $urls);
     file_put_contents($urls_file, $urls);
+
+    if ($this->options->remoteSiege) {
+      exec('scp ' . $urls_file . ' ' .
+        $this->options->remoteSiege . ':' . $this->options->siegeTmpDir);
+      $urls_file = $this->options->siegeTmpDir . '/' . basename($urls_file);
+    }
 
     $arguments = Vector {};
     if (!$this->options->noTimeLimit) {
@@ -96,6 +121,10 @@ final class Siege extends Process {
     $siege_rc = $this->target->getSiegeRCPath();
     if ($siege_rc !== null) {
       $arguments->addAll(Vector {'-R', $siege_rc});
+    }
+
+    if (!$this->options->fetchResources) {
+      $arguments->add('--no-parser');
     }
 
     switch ($this->mode) {
@@ -117,9 +146,9 @@ final class Siege extends Process {
         $arguments->addAll(
           Vector {
             '-c',
-            (string) PerfSettings::BenchmarkConcurrency(),
+            $this->options->clientThreads,
             '-t',
-            '1M',
+            $this->time,
             '-f',
             $urls_file,
             '--benchmark',
@@ -128,14 +157,20 @@ final class Siege extends Process {
         );
         return $arguments;
       case RequestModes::BENCHMARK:
+        if($this->options->remoteSiege) {
+          $logfile = $this->options->siegeTmpDir . '/' .
+	    basename($this->logfile);
+        } else {
+          $logfile = $this->logfile;
+        }
         $arguments->addAll(
           Vector {
             '-c',
-            (string) PerfSettings::BenchmarkConcurrency(),
+            $this->options->clientThreads,
             '-f',
             $urls_file,
             '--benchmark',
-            '--log='.$this->logfile,
+            '--log='.$logfile,
           },
         );
 
@@ -146,7 +181,7 @@ final class Siege extends Process {
         return $arguments;
       default:
         invariant_violation(
-          'Unexpected request mode: '.(string) $this->mode,
+          'Unexpected request mode: %s', (string) $this->mode,
         );
     }
   }

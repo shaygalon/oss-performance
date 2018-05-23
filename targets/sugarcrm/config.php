@@ -1,4 +1,12 @@
 <?php
+/*
+ *  Copyright (c) 2014-present, Facebook, Inc.
+ *  All rights reserved.
+ *
+ *  This source code is licensed under the MIT license found in the
+ *  LICENSE file in the root directory of this source tree.
+ *
+ */
 // created: 2014-08-29 21:03:02
 $sugar_config = array (
   'admin_access_control' => false,
@@ -52,7 +60,7 @@ $sugar_config = array (
   'datef' => 'm/d/Y',
   'dbconfig' => 
   array (
-    'db_host_name' => '127.0.0.1',
+    'db_host_name' => '__DB_HOST__',
     'db_host_instance' => 'SQLEXPRESS',
     'db_user_name' => 'sugarcrm',
     'db_password' => 'sugarcrm',
