@@ -28,7 +28,7 @@ RUN echo "$TZ" > /etc/timezone && ln -sf /usr/share/zoneinfo/$TZ /etc/localtime 
 # mysql first time will fail to start after install due to permissions.
 RUN bash -c "debconf-set-selections <<< 'mysql-server mysql-server/root_password password root'" && \
 	bash -c "debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password root'" && \
-	apt install -y mysql-server nginx curl && \
+	apt install -y mysql-server nginx curl wget php && \
 	( chown -R mysql:mysql /var/lib/mysql /var/run/mysqld || true ) && find /var/lib/mysql -type f -exec touch {} \; && \
 	( service mysql start || true ) && \
 	( chmod 766 /var/log/nginx/error.log || true )
@@ -76,6 +76,7 @@ RUN cmake -DENABLE_LD_GOLD=Off -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=/
 	make -j && make install
 
 WORKDIR /opt/oss-performance
+RUN wget https://getcomposer.org/installer && php installer && export PATH=/opt/hhvm/hphp/hhvm/:$PATH && ./composer.phar install
 
 #If mysql is installed on the host disable mysql in apparmor on the host:
 # sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable
