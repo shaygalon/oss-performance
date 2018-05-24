@@ -71,7 +71,7 @@ RUN git clone https://github.com/hhvm/oss-performance.git
 RUN git clone https://github.com/facebook/hhvm.git && cd hhvm && git checkout $HHVM_TAG && git submodule update --init --recursive 
 	 
 WORKDIR /opt/hhvm
-RUN cmake -DENABLE_LD_GOLD=Off -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=/opt/hhvm-$HHVM_TAG \
+RUN cmake -DENABLE_LD_GOLD=Off -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/hhvm-$HHVM_TAG \
 	-DMYSQL_UNIX_SOCK_ADDR=/var/run/mysqld/mysqld.sock \
 	-DENABLE_AARCH64_CRC=1 -DAARCH64_TARGET_CPU=native . && \
 	make -j && make install
