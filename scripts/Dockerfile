@@ -29,7 +29,7 @@ RUN echo "$TZ" > /etc/timezone && ln -sf /usr/share/zoneinfo/$TZ /etc/localtime 
 RUN bash -c "debconf-set-selections <<< 'mysql-server mysql-server/root_password password root'" && \
 	bash -c "debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password root'" && \
 	apt install -y mysql-server nginx curl wget php && \
-	echo "max_connections        = 1000" >> /etc/mysql/my.cnf && \
+	echo "max_connections        = 1000" >> /etc/mysql/mysql.conf.d/mysqld.cnf && \
 	( chown -R mysql:mysql /var/lib/mysql /var/run/mysqld || true ) && find /var/lib/mysql -type f -exec touch {} \; && \
 	( service mysql start || true ) && \
 	( chmod 766 /var/log/nginx/error.log || true )
@@ -83,9 +83,10 @@ RUN wget https://getcomposer.org/installer && php installer && export PATH=/opt/
 # sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable
 # sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 #docker build -t oss .
-#run docker with --privileged --sysctl net.ipv4.tcp_tw_reuse=1 -v <path to hhvm>:/opt/hhvm -it oss bash
+#run docker with --privileged --sysctl net.ipv4.tcp_tw_reuse=1 -it oss bash
+# Optionally add -v <path to hhvm>:/opt/hhvm if using a different version of hhvm instead of the one built in the container.
 # In the docker start mysql as 
-#  sudo find /var/lib/mysql -type f -exec touch {} \; && service mysql restart
+#  sudo find /var/lib/mysql -type f -exec touch {} \; && sudo service mysql restart
 # * May fail first time depending on what storage options are used for docker, just repeat if it fails, second time will pass.
 # run /opt/hhvm/hphp/hhvm/hhvm perf.php --i-am-not-benchmarking --trace --<test> --hhvm=/opt/hhvm/hphp/hhvm/hhvm 
 
