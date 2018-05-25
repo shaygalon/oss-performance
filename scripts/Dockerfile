@@ -18,7 +18,8 @@ RUN DEBIAN_FRONTEND=noninteractive && apt-get install -y sudo vim autoconf autom
  libonig-dev libpcre3-dev libreadline-dev libtbb-dev libtool libxml2-dev zlib1g-dev \
  libevent-dev libmagickwand-dev libinotifytools0-dev libiconv-hook-dev libedit-dev \
  libiberty-dev libxslt1-dev ocaml-native-compilers libsqlite3-dev libyaml-dev libmpc-dev \
- gperf libkrb5-dev libnotify-dev libdouble-conversion-dev zlib1g-dev libdouble-conversion-dev locales tzdata
+ gperf libkrb5-dev libnotify-dev libdouble-conversion-dev zlib1g-dev libdouble-conversion-dev locales tzdata \
+ zip unzip
 
 ENV TZ=America/Los_Angeles
 RUN echo "$TZ" > /etc/timezone && ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
@@ -65,7 +66,10 @@ RUN ( chown -R mysql:mysql /var/lib/mysql /var/run/mysqld || true ) && find /var
 EXPOSE 8091
 EXPOSE 8092
 EXPOSE 8093
- 
+
+COPY entry.sh /opt/oss-performance/entry.sh
+RUN chmod +x /opt/oss-performance/entry.sh
+
 USER cavium
 RUN git clone https://github.com/hhvm/oss-performance.git
 RUN git clone https://github.com/facebook/hhvm.git && cd hhvm && git checkout $HHVM_TAG && git submodule update --init --recursive 
@@ -79,14 +83,19 @@ RUN cmake -DENABLE_LD_GOLD=Off -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX
 WORKDIR /opt/oss-performance
 RUN wget https://getcomposer.org/installer && php installer && export PATH=/opt/hhvm/hphp/hhvm/:$PATH && ./composer.phar install
 
+ENTRYPOINT ["/opt/oss-performance/entry.sh"]
+
 #If mysql is installed on the host disable mysql in apparmor on the host:
 # sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable
 # sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 #docker build -t oss .
-#run docker with --privileged --sysctl net.ipv4.tcp_tw_reuse=1 -it oss bash
+#run docker with 
+# --privileged --sysctl net.ipv4.tcp_tw_reuse=1 -t oss [--<test to run]
+# or
+# --privileged --sysctl net.ipv4.tcp_tw_reuse=1 -it oss bash
+#privileged mode to avoid error report from hhvm
+#
 # Optionally add -v <path to hhvm>:/opt/hhvm if using a different version of hhvm instead of the one built in the container.
-# In the docker start mysql as 
-#  sudo find /var/lib/mysql -type f -exec touch {} \; && sudo service mysql restart
-# * May fail first time depending on what storage options are used for docker, just repeat if it fails, second time will pass.
-# run /opt/hhvm/hphp/hhvm/hhvm perf.php --i-am-not-benchmarking --trace --<test> --hhvm=/opt/hhvm/hphp/hhvm/hhvm 
+# Running if using interactive bash session
+# /opt/hhvm/hphp/hhvm/hhvm perf.php --i-am-not-benchmarking --trace --<test> --hhvm=/opt/hhvm/hphp/hhvm/hhvm 
 
