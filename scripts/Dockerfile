@@ -3,38 +3,51 @@ FROM ubuntu:16.04
 MAINTAINER Shay Gal-On <sgalon@cavium.com>
 
 ENV HHVM_TAG=4b7842e59e2e3313c4a2b2983c4c0280467b78f2
+ENV JEMALLOC_TAG=4.5.0
+ENV SIEGE_TAG=tags/v4.0.3rc3
 
 RUN apt update -y && apt-get install -y software-properties-common apt-transport-https && \
 	apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xB4112585D386EB94 && \
 	add-apt-repository -s https://dl.hhvm.com/ubuntu && \
 	apt update -y 
-	
-RUN DEBIAN_FRONTEND=noninteractive && apt-get install -y sudo vim autoconf automake binutils-dev build-essential cmake g++ gawk git \
- libboost-dev libboost-filesystem-dev libboost-program-options-dev libboost-regex-dev \
- libboost-system-dev libboost-thread-dev libboost-context-dev libbz2-dev libc-client-dev libldap2-dev \
- libc-client2007e-dev libcap-dev libcurl4-openssl-dev libdwarf-dev libelf-dev \
- libexpat-dev libgd2-xpm-dev libgoogle-glog-dev libgoogle-perftools-dev libicu-dev \
- libjemalloc-dev libmcrypt-dev libmemcached-dev libmysqlclient-dev libncurses-dev \
- libonig-dev libpcre3-dev libreadline-dev libtbb-dev libtool libxml2-dev zlib1g-dev \
- libevent-dev libmagickwand-dev libinotifytools0-dev libiconv-hook-dev libedit-dev \
- libiberty-dev libxslt1-dev ocaml-native-compilers libsqlite3-dev libyaml-dev libmpc-dev \
- gperf libkrb5-dev libnotify-dev libdouble-conversion-dev zlib1g-dev libdouble-conversion-dev locales tzdata \
- zip unzip
 
+#hhvm dependecies
+RUN DEBIAN_FRONTEND=noninteractive && apt-get -y build-dep hhvm-nightly && \
+ apt install -y sudo vim gawk git zip unzip curl wget php ssh \
+ camlp4 ledit libcamlp4-ocaml-dev libdouble-conversion-dev \
+ libdouble-conversion1v5 libfindlib-ocaml libfindlib-ocaml-dev libgpm2 \
+ libmpc-dev libmpfr-dev libmysqlclient-dev libmysqlclient20 libpython3.5 \
+ libreadline-dev libreadline6-dev locales mysql-common ocaml-base-nox \
+ ocaml-compiler-libs ocaml-findlib ocaml-interp ocaml-native-compilers \
+ ocaml-nox 
+
+#setup timezone to pacific
 ENV TZ=America/Los_Angeles
 RUN echo "$TZ" > /etc/timezone && ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
 	for l in en_EN en_UK en_US en_GB de_DE fr_FR fa_IR zh_CN.utf8 zh_CN ; do \
 	locale-gen $l || true ; done 
 
-# mysql first time will fail to start after install due to permissions.
+#mysql install and permissions for oss-performance use of nginx
 RUN bash -c "debconf-set-selections <<< 'mysql-server mysql-server/root_password password root'" && \
 	bash -c "debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password root'" && \
-	apt install -y mysql-server nginx curl wget php && \
-	echo "max_connections        = 1000" >> /etc/mysql/mysql.conf.d/mysqld.cnf && \
+	apt install -y mysql-server nginx && \
 	( chown -R mysql:mysql /var/lib/mysql /var/run/mysqld || true ) && find /var/lib/mysql -type f -exec touch {} \; && \
 	( service mysql start || true ) && \
 	( chmod 766 /var/log/nginx/error.log || true )
 
+#mysql setup for oss-performance
+RUN ( chown -R mysql:mysql /var/lib/mysql /var/run/mysqld || true ) && find /var/lib/mysql -type f -exec touch {} \; && \
+	echo "max_connections        = 1000" >> /etc/mysql/mysql.conf.d/mysqld.cnf && \
+	service mysql restart && \
+	mysql -u root -h localhost --port 3306 --password=root -e "SET GLOBAL max_connections = 1000;" && \
+	for db in mw_bench drupal_bench wp_bench ; do \
+	mysql -u root -h localhost --port 3306 --password=root -e "CREATE DATABASE $db;" && \
+	mysql -u root -h localhost --port 3306 --password=root -e "CREATE USER '$db'@'localhost' IDENTIFIED BY '$db';" && \
+	mysql -u root -h localhost --port 3306 --password=root -e "GRANT ALL PRIVILEGES ON $db.* TO $db@'%' IDENTIFIED BY '$db';" ; \
+	done && \
+	service mysql stop
+
+#add non-root user
 RUN sed -i.bkp -e 's/%sudo\s\+ALL=(ALL\(:ALL\)\?)\s\+ALL/%sudo ALL=NOPASSWD:ALL/g' /etc/sudoers && \
 	echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config && \
 	useradd -ms /bin/bash cavium && echo "cavium:cavium" | chpasswd && adduser cavium sudo && \
@@ -44,24 +57,17 @@ RUN sed -i.bkp -e 's/%sudo\s\+ALL=(ALL\(:ALL\)\?)\s\+ALL/%sudo ALL=NOPASSWD:ALL/
 RUN chmod a+w /opt
 WORKDIR /opt
 
-RUN git clone https://github.com/JoeDog/siege.git && cd siege && git checkout tags/v4.0.3rc3 && \
+#version of siege that works with oss
+RUN git clone https://github.com/JoeDog/siege.git && cd siege && git checkout $SIEGE_TAG && \
 	./utils/bootstrap && automake --add-missing && \
 	./configure && make -j && make install && \
 	cd .. && rm -rf siege
 
-RUN git clone https://github.com/jemalloc/jemalloc.git && cd jemalloc && git checkout 4.5.0 && \
+#jemalloc.so.2, using a specific version
+RUN git clone https://github.com/jemalloc/jemalloc.git && cd jemalloc && git checkout $JEMALLOC_TAG && \
 	./autogen.sh && make -j && ( make install || true ) && ln -s /usr/local/lib/libjemalloc.so.2 /usr/lib/aarch64-linux-gnu && \
 	cd .. && rm -rf jemalloc
 
-RUN ( chown -R mysql:mysql /var/lib/mysql /var/run/mysqld || true ) && find /var/lib/mysql -type f -exec touch {} \; && \
-	service mysql restart && \
-	mysql -u root -h localhost --port 3306 --password=root -e "SET GLOBAL max_connections = 1000;" && \
-	for db in mw_bench drupal_bench wp_bench ; do \
-	mysql -u root -h localhost --port 3306 --password=root -e "CREATE DATABASE $db;" && \
-	mysql -u root -h localhost --port 3306 --password=root -e "CREATE USER '$db'@'localhost' IDENTIFIED BY '$db';" && \
-	mysql -u root -h localhost --port 3306 --password=root -e "GRANT ALL PRIVILEGES ON $db.* TO $db@'%' IDENTIFIED BY '$db';" ; \
-	done && \
-	service mysql stop
 
 EXPOSE 8091
 EXPOSE 8092
