@@ -73,8 +73,8 @@ EXPOSE 8091
 EXPOSE 8092
 EXPOSE 8093
 
-COPY entry.sh /opt/oss-performance/entry.sh
-RUN chmod +x /opt/oss-performance/entry.sh
+COPY entry.sh /usr/local/bin/entry.sh
+RUN chmod +x /usr/local/bin/entry.sh
 
 USER cavium
 RUN git clone https://github.com/hhvm/oss-performance.git
@@ -89,7 +89,7 @@ RUN cmake -DENABLE_LD_GOLD=Off -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX
 WORKDIR /opt/oss-performance
 RUN wget https://getcomposer.org/installer && php installer && export PATH=/opt/hhvm/hphp/hhvm/:$PATH && ./composer.phar install
 
-ENTRYPOINT ["/opt/oss-performance/entry.sh"]
+ENTRYPOINT ["/usr/local/bin/entry.sh"]
 
 #If mysql is installed on the host disable mysql in apparmor on the host:
 # sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable
