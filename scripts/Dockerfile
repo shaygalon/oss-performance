@@ -2,7 +2,7 @@ FROM ubuntu:16.04
 
 MAINTAINER Shay Gal-On <sgalon@cavium.com>
 
-ENV HHVM_TAG=4b7842e59e2e3313c4a2b2983c4c0280467b78f2
+ENV HHVM_TAG=ae5f4da564f461c1fb0652a431f7b6206f1f7047
 ENV JEMALLOC_TAG=4.5.0
 ENV SIEGE_TAG=tags/v4.0.3rc3
 
@@ -77,14 +77,14 @@ COPY entry.sh /usr/local/bin/entry.sh
 RUN chmod +x /usr/local/bin/entry.sh
 
 USER cavium
-RUN git clone https://github.com/hhvm/oss-performance.git
+RUN git clone https://github.com/shaygalon/oss-performance.git
 RUN git clone https://github.com/facebook/hhvm.git && cd hhvm && git checkout $HHVM_TAG && git submodule update --init --recursive 
 	 
 WORKDIR /opt/hhvm
 RUN cmake -DENABLE_LD_GOLD=Off -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/hhvm-$HHVM_TAG \
 	-DMYSQL_UNIX_SOCK_ADDR=/var/run/mysqld/mysqld.sock \
 	-DENABLE_AARCH64_CRC=1 -DAARCH64_TARGET_CPU=native . && \
-	make -j && make install
+	make -j 16 && make install
 
 WORKDIR /opt/oss-performance
 RUN wget https://getcomposer.org/installer && php installer && export PATH=/opt/hhvm/hphp/hhvm/:$PATH && ./composer.phar install

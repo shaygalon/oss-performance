@@ -72,10 +72,10 @@ class SystemChecks {
         continue;
       }
       $gov = trim(file_get_contents($gov_file));
-      invariant(
-        $gov === 'performance',
-        'Unsuitable CPU speed policy - see cpufreq.md',
-      );
+#      invariant(
+#        $gov === 'performance',
+#        'Unsuitable CPU speed policy - see cpufreq.md',
+#      ); Disabling this check to be able to test multiple policies.
     }
   }
 
