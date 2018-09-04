@@ -81,9 +81,11 @@ RUN git clone https://github.com/shaygalon/oss-performance.git
 RUN git clone https://github.com/facebook/hhvm.git && cd hhvm && git checkout $HHVM_TAG && git submodule update --init --recursive 
 	 
 WORKDIR /opt/hhvm
-RUN cmake -DENABLE_LD_GOLD=Off -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/hhvm-$HHVM_TAG \
+RUN if [ `uname -m` = "aarch64" ] ; then \
+	EXTRAS="-DENABLE_AARCH64_CRC=1 -DAARCH64_TARGET_CPU=native" ; \
+	cmake -DENABLE_LD_GOLD=Off -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/hhvm-$HHVM_TAG \
 	-DMYSQL_UNIX_SOCK_ADDR=/var/run/mysqld/mysqld.sock \
-	-DENABLE_AARCH64_CRC=1 -DAARCH64_TARGET_CPU=native . && \
+	$EXTRAS . && \
 	make -j 16 && make install
 
 WORKDIR /opt/oss-performance
