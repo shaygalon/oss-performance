@@ -82,7 +82,7 @@ RUN git clone https://github.com/facebook/hhvm.git && cd hhvm && git checkout $H
 	 
 WORKDIR /opt/hhvm
 RUN if [ `uname -m` = "aarch64" ] ; then \
-	EXTRAS="-DENABLE_AARCH64_CRC=1 -DAARCH64_TARGET_CPU=native" ; \
+	EXTRAS="-DENABLE_AARCH64_CRC=1 -DAARCH64_TARGET_CPU=native" ; fi ; \
 	cmake -DENABLE_LD_GOLD=Off -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/hhvm-$HHVM_TAG \
 	-DMYSQL_UNIX_SOCK_ADDR=/var/run/mysqld/mysqld.sock \
 	$EXTRAS . && \
@@ -98,9 +98,9 @@ ENTRYPOINT ["/usr/local/bin/entry.sh"]
 # sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 #docker build -t oss .
 #run docker with 
-# --privileged --sysctl net.ipv4.tcp_tw_reuse=1 -t oss [--<test to run]
+# --rm --privileged --sysctl net.ipv4.tcp_tw_reuse=1 -t oss [--<test to run]
 # or
-# --privileged --sysctl net.ipv4.tcp_tw_reuse=1 -it oss bash
+# --rm --privileged --sysctl net.ipv4.tcp_tw_reuse=1 -it oss bash
 #privileged mode to avoid error report from hhvm
 #
 # Optionally add -v <path to hhvm>:/opt/hhvm if using a different version of hhvm instead of the one built in the container.
