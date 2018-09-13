@@ -54,6 +54,12 @@ http {
       rewrite ^ /index.php last;
     }
 
+	location /nginx_status {
+	  stub_status on;
+	  access_log   off;
+	  allow all;
+	}
+
     location ~ [^/]\.php(/|$) {
       fastcgi_split_path_info ^(.+?\.php)(/.*)$;
       if (!-f $document_root$fastcgi_script_name) {
