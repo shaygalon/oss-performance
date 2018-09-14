@@ -69,6 +69,7 @@ RUN git clone https://github.com/jemalloc/jemalloc.git && cd jemalloc && git che
 	cd .. && rm -rf jemalloc
 
 
+EXPOSE 8090
 EXPOSE 8091
 EXPOSE 8092
 EXPOSE 8093
@@ -106,4 +107,8 @@ ENTRYPOINT ["/usr/local/bin/entry.sh"]
 # Optionally add -v <path to hhvm>:/opt/hhvm if using a different version of hhvm instead of the one built in the container.
 # Running if using interactive bash session
 # /opt/hhvm/hphp/hhvm/hhvm perf.php --i-am-not-benchmarking --trace --<test> --hhvm=/opt/hhvm/hphp/hhvm/hhvm 
+# To run mediawiki forever and expose nginx port for monitoring from outside the container
+# docker run --rm --privileged --sysctl net.ipv4.tcp_tw_reuse=1 -p 8090:8090 -t oss --mediawiki --no-time-limit
+#  Req info can then be read from http://localhost:8090/nginx_status (see watchme.sh for example)
+
 
